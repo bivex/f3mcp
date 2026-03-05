@@ -4,6 +4,14 @@ This server verifies a stored spec version by translating its conditions into SM
 
 On macOS, the server prefers Homebrew's system binary at `/opt/homebrew/bin/z3` and falls back to `/usr/local/bin/z3` or `z3` from `PATH`. You can override the binary path explicitly with `Z3_BINARY=/absolute/path/to/z3`.
 
+The adapter currently invokes Z3 with CLI flags aligned to the installed 4.15.x interface:
+
+- `-in` to read SMT-LIB from stdin;
+- `-smt2` to force SMT-LIB v2 parsing;
+- `-t:<ms>` for a soft per-query timeout;
+- `-nw` to suppress warning noise in tool output;
+- `-model` only on the counterexample pass.
+
 If Z3 launches successfully but rejects the submitted expressions, the tool returns `VALIDATION_FAILED` with the solver's message. A common cause is using infix syntax like `x > 0` instead of SMT-LIB prefix syntax like `(> x 0)`.
 
 ## Supported input style

@@ -30,7 +30,7 @@ export class Z3ProofEngine implements ProofEngine {
 
     const declarations = this.inferDeclarations([...spec.preconditions, ...spec.invariants, ...spec.postconditions]);
     const assumptions = [...spec.preconditions, ...spec.invariants];
-    const consistency = await this.runZ3(this.buildScript(declarations, [...assumptions, ...spec.postconditions], false));
+    const consistency = await this.runZ3(this.buildScript(declarations, [...assumptions, ...spec.postconditions]));
     if (consistency.status === "unsat") {
       return { engine: "z3", solverStatus: consistency.status, status: "failed" as const, failureReason: "The specification is internally inconsistent." };
     }
@@ -39,12 +39,12 @@ export class Z3ProofEngine implements ProofEngine {
     }
 
     const negatedPost = spec.postconditions.length === 1 ? `(not ${spec.postconditions[0]})` : `(not (and ${spec.postconditions.join(" ")}))`;
-    const proof = await this.runZ3(this.buildScript(declarations, [...assumptions, negatedPost], false));
+    const proof = await this.runZ3(this.buildScript(declarations, [...assumptions, negatedPost]));
     if (proof.status === "unsat") {
       return { engine: "z3", solverStatus: proof.status, status: "passed" as const };
     }
     if (proof.status === "sat") {
-      const model = await this.runZ3(this.buildScript(declarations, [...assumptions, negatedPost], true));
+      const model = await this.runZ3(this.buildScript(declarations, [...assumptions, negatedPost]), true);
       return { engine: "z3", solverStatus: proof.status, status: "failed" as const, failureReason: "Z3 found a counterexample that violates the postconditions.", counterexample: model.model };
     }
     throw contractError("SOLVER_UNKNOWN", "Z3 returned unknown for the proof obligation.", { retryable: true, details: proof.output });
@@ -61,13 +61,17 @@ export class Z3ProofEngine implements ProofEngine {
     return [...symbols].sort().map((symbol) => `(declare-const ${symbol} Int)`);
   }
 
-  private buildScript(declarations: string[], assertions: string[], includeModel: boolean) {
-    return [...declarations, ...assertions.map((expr) => `(assert ${expr})`), "(check-sat)", includeModel ? "(get-model)" : "", "(exit)"].filter(Boolean).join("\n");
+  private buildScript(declarations: string[], assertions: string[]) {
+    return [...declarations, ...assertions.map((expr) => `(assert ${expr})`), "(check-sat)", "(exit)"].join("\n");
   }
 
-  private runZ3(script: string): Promise<{ status: "sat" | "unsat" | "unknown"; output: string; model?: string }> {
+  private buildArgs(includeModel: boolean) {
+    return ["-in", "-smt2", `-t:${this.timeoutMs}`, "-nw", ...(includeModel ? ["-model"] : [])];
+  }
+
+  private runZ3(script: string, includeModel = false): Promise<{ status: "sat" | "unsat" | "unknown"; output: string; model?: string }> {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.binaryPath, ["-in", "-smt2"]);
+      const child = spawn(this.binaryPath, this.buildArgs(includeModel));
       let stdout = "";
       let stderr = "";
       const timer = setTimeout(() => { child.kill("SIGKILL"); reject(contractError("SOLVER_TIMEOUT", `Z3 timed out after ${this.timeoutMs}ms`, { retryable: true })); }, this.timeoutMs);

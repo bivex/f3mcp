@@ -276,9 +276,11 @@ test("Z3ProofEngine handles unknown solver states and exposes helper internals",
 
   const helperEngine = new Z3ProofEngine(systemZ3, 500);
   assert.deepEqual(helperEngine.inferDeclarations(["(and (> n 0) (= result (+ n x)) true)"]).sort(), ["(declare-const n Int)", "(declare-const result Int)", "(declare-const x Int)"]);
-  const script = helperEngine.buildScript(["(declare-const n Int)"], ["(> n 0)"], true);
+  const script = helperEngine.buildScript(["(declare-const n Int)"], ["(> n 0)"]);
   assert.match(script, /\(declare-const n Int\)/u);
   assert.match(script, /\(assert \(> n 0\)\)/u);
-  assert.match(script, /\(get-model\)/u);
   assert.match(script, /\(exit\)\s*$/u);
+
+  assert.deepEqual(helperEngine.buildArgs(false), ["-in", "-smt2", "-t:500", "-nw"]);
+  assert.deepEqual(helperEngine.buildArgs(true), ["-in", "-smt2", "-t:500", "-nw", "-model"]);
 });

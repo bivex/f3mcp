@@ -101,7 +101,9 @@ test("verification stack is layered and uses a real solver adapter", () => {
 
   assert.equal(verificationSource.includes("VerificationService"), true);
   assert.equal(verificationSource.includes("Z3ProofEngine"), true);
-  assert.equal(proofEngineSource.includes('spawn(this.binaryPath, ["-in", "-smt2"])'), true);
+  assert.equal(proofEngineSource.includes("buildArgs(includeModel)"), true);
+  assert.equal(proofEngineSource.includes('`-t:${this.timeoutMs}`'), true);
+  assert.equal(proofEngineSource.includes('"-model"'), true);
   assert.equal(errorContractsSource.includes("SOLVER_UNAVAILABLE"), true);
   assert.equal(errorContractsSource.includes("JOB_NOT_CANCELLABLE"), true);
 });
