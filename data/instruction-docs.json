@@ -1,0 +1,11 @@
+{
+  "LDR": "Load register from memory",
+  "STR": "Store register to memory",
+  "ADD": "Add operands",
+  "ADDS": "Add operands and update flags",
+  "CBZ": "Branch if zero",
+  "CBNZ": "Branch if not zero",
+  "BL": "Branch with link",
+  "RET": "Return from function"
+}
+

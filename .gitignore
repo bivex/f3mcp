@@ -1,0 +1,23 @@
+node_modules/
+build/
+
+# Coverage and test artifacts
+coverage/
+.coverage/
+
+# Logs
+*.log
+npm-debug.log*
+bun-debug.log*
+
+# Environment overrides
+.env
+.env.*
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# TypeScript incremental state
+*.tsbuildinfo
