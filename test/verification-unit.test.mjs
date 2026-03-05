@@ -145,6 +145,68 @@ test("VerificationService creates a new job and explains failures with counterex
   const explanation = await service.explain(job.jobId);
   assert.equal(explanation.explanation, "counterexample found");
   assert.equal(explanation.counterexample, "(model (define-fun n () Int 7))");
+
+  const waited = await service.waitForCompletion(job.jobId, 5, 1);
+  assert.equal(waited.completed, true);
+  assert.equal(waited.job.jobId, job.jobId);
+
+  const excerpt = await service.getCounterexampleExcerpt(job.jobId, 1);
+  assert.equal(excerpt.hasCounterexample, true);
+  assert.equal(excerpt.linesShown, 1);
+  assert.match(excerpt.excerpt, /define-fun n/u);
+});
+
+test("VerificationService wait and counterexample helpers cover missing and non-terminal jobs", async () => {
+  const mutableJobs = [{
+    jobId: "job_running",
+    functionName: "demo_fn",
+    specVersion: 1,
+    status: "running",
+    createdAt: new Date().toISOString(),
+    engine: "z3",
+  }];
+
+  const service = new VerificationService({
+    async getVersion() {
+      return null;
+    },
+  }, {
+    async findByFunctionAndVersion() {
+      return null;
+    },
+    async save(job) {
+      const index = mutableJobs.findIndex((entry) => entry.jobId === job.jobId);
+      if (index >= 0) mutableJobs[index] = job;
+      else mutableJobs.push(job);
+      return job;
+    },
+    async get(jobId) {
+      return mutableJobs.find((job) => job.jobId === jobId) ?? null;
+    },
+    async list() {
+      return mutableJobs;
+    },
+  }, {
+    async verify() {
+      throw new Error("unused");
+    },
+  });
+
+  assert.equal(await service.waitForCompletion("job_missing"), null);
+  const waited = await service.waitForCompletion("job_running", 5, 1);
+  assert.equal(waited.completed, false);
+  assert.equal(waited.job.status, "running");
+
+  const emptyExcerpt = await service.getCounterexampleExcerpt("job_running", 3);
+  assert.deepEqual(emptyExcerpt, {
+    jobId: "job_running",
+    status: "running",
+    hasCounterexample: false,
+    excerpt: undefined,
+    linesShown: 0,
+    totalLines: 0,
+  });
+  assert.equal(await service.getCounterexampleExcerpt("job_missing"), null);
 });
 
 test("VerificationService cancels running jobs and rejects finished jobs", async () => {

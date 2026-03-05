@@ -57,10 +57,25 @@ test("specification server exposes tools, resources, prompts, and missing-spec e
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "create_spec",
+      "diff_spec_versions",
       "list_spec_versions",
       "update_spec",
+      "validate_smt_clause",
       "validate_spec_consistency",
     ]);
+
+    const validClause = await client.callTool({
+      name: "validate_smt_clause",
+      arguments: { clause: "(>= n 0)", section: "preconditions" },
+    });
+    assert.equal(validClause.structuredContent.valid, true);
+
+    const invalidClause = await client.callTool({
+      name: "validate_smt_clause",
+      arguments: { clause: "n >= 0", section: "preconditions" },
+    });
+    assert.equal(invalidClause.structuredContent.valid, false);
+    assert.match(invalidClause.structuredContent.issue, /not a valid SMT-LIB/u);
 
     const created = await client.callTool({
       name: "create_spec",
@@ -117,6 +132,20 @@ test("specification server exposes tools, resources, prompts, and missing-spec e
       arguments: { functionName: "demo_fn" },
     });
     assert.equal(versions.structuredContent.versions.length, 2);
+
+    const diff = await client.callTool({
+      name: "diff_spec_versions",
+      arguments: { functionName: "demo_fn", fromVersion: 1, toVersion: 2 },
+    });
+    assert.equal(diff.structuredContent.changed, true);
+    assert.deepEqual(diff.structuredContent.changedSections, ["invariants"]);
+
+    const missingVersion = await client.callTool({
+      name: "diff_spec_versions",
+      arguments: { functionName: "demo_fn", fromVersion: 1, toVersion: 99 },
+    });
+    assert.equal(missingVersion.isError, true);
+    assert.equal(missingVersion.structuredContent.error.code, "SPEC_VERSION_NOT_FOUND");
 
     const resources = await client.listResources();
     assert.deepEqual(resources.resources.map((resource) => resource.uri), ["spec://functions/demo_fn/latest"]);
@@ -278,6 +307,15 @@ test("verification server exposes prompt/resource flows and structured not-found
     assert.match(status.content[0].text, /status: passed/u);
     assert.match(status.content[0].text, /solverStatus: unsat/u);
 
+    const waited = await client.callTool({ name: "wait_for_verification", arguments: { jobId, timeoutMs: 50, pollIntervalMs: 5 } });
+    assert.notEqual(waited.isError, true, stderr.join(""));
+    assert.equal(waited.structuredContent.completed, true);
+    assert.equal(waited.structuredContent.job.jobId, jobId);
+
+    const excerpt = await client.callTool({ name: "get_counterexample_excerpt", arguments: { jobId, maxLines: 3 } });
+    assert.notEqual(excerpt.isError, true, stderr.join(""));
+    assert.equal(excerpt.structuredContent.hasCounterexample, false);
+
     const prompts = await client.listPrompts();
     assert.deepEqual(prompts.prompts.map((prompt) => prompt.name), ["triage_failure"]);
 
@@ -288,7 +326,7 @@ test("verification server exposes prompt/resource flows and structured not-found
     assert.notEqual(explanation.isError, true, stderr.join(""));
     assert.match(explanation.content[0].text, /summary: Verification passed with no counterexample\./u);
 
-    for (const toolName of ["get_verification_status", "cancel_verification", "explain_verification_failure"]) {
+    for (const toolName of ["get_verification_status", "wait_for_verification", "cancel_verification", "explain_verification_failure", "get_counterexample_excerpt"]) {
       const result = await client.callTool({ name: toolName, arguments: { jobId: "job_missing" } });
       assert.equal(result.isError, true);
       assert.equal(result.structuredContent.error.code, "JOB_NOT_FOUND");

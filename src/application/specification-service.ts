@@ -14,7 +14,8 @@
  */
 
 import type { CreateSpecInput, Spec, UpdateSpecInput } from "../contracts/specification.js";
-import { assertValidSpecExpressions } from "../shared/spec-expression-validation.js";
+import { contractError } from "../contracts/errors.js";
+import { assertValidSpecExpressions, validateSpecClause, type ClauseSection } from "../shared/spec-expression-validation.js";
 
 export interface SpecificationRepository {
   create(input: CreateSpecInput): Promise<Spec>;
@@ -49,6 +50,42 @@ export class SpecificationService {
     return { functionName, valid: issues.length === 0, issues };
   }
 
+  validateClause(clause: string, section: ClauseSection = "postconditions") {
+    return validateSpecClause(clause, section);
+  }
+
+  async diff(functionName: string, fromVersion: number, toVersion: number) {
+    const [fromSpec, toSpec] = await Promise.all([
+      this.repo.getVersion(functionName, fromVersion),
+      this.repo.getVersion(functionName, toVersion),
+    ]);
+
+    if (!fromSpec) {
+      throw contractError("SPEC_VERSION_NOT_FOUND", `No spec version ${fromVersion} found for ${functionName}`);
+    }
+    if (!toSpec) {
+      throw contractError("SPEC_VERSION_NOT_FOUND", `No spec version ${toVersion} found for ${functionName}`);
+    }
+
+    const diff = {
+      preconditions: diffClauses(fromSpec.preconditions, toSpec.preconditions),
+      postconditions: diffClauses(fromSpec.postconditions, toSpec.postconditions),
+      invariants: diffClauses(fromSpec.invariants, toSpec.invariants),
+    };
+    const changedSections = (Object.entries(diff)
+      .filter(([, sectionDiff]) => sectionDiff.added.length || sectionDiff.removed.length)
+      .map(([section]) => section)) as ClauseSection[];
+
+    return {
+      functionName,
+      fromVersion,
+      toVersion,
+      changed: changedSections.length > 0,
+      changedSections,
+      diff,
+    };
+  }
+
   latest(functionName: string) {
     return this.repo.latest(functionName);
   }
@@ -64,5 +101,15 @@ export class SpecificationService {
   listLatest() {
     return this.repo.listLatest();
   }
+}
+
+function diffClauses(fromClauses: string[], toClauses: string[]) {
+  const toSet = new Set(toClauses);
+  const fromSet = new Set(fromClauses);
+  return {
+    added: toClauses.filter((clause) => !fromSet.has(clause)),
+    removed: fromClauses.filter((clause) => !toSet.has(clause)),
+    unchanged: toClauses.filter((clause) => fromSet.has(clause)),
+  };
 }
 

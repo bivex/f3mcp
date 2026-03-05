@@ -32,31 +32,56 @@ const SMT_EXAMPLES = [
 type ClauseSections = Pick<CreateSpecInput, "preconditions" | "postconditions" | "invariants">;
 type PartialClauseSections = Pick<UpdateSpecInput, "preconditions" | "postconditions" | "invariants">;
 
+export type ClauseSection = keyof ClauseSections;
+
+export function validateSpecClause(rawClause: string, section: ClauseSection) {
+  const clause = rawClause.trim();
+  if (!clause) {
+    return validationFailure(section, 0, rawClause, "Clause is empty.");
+  }
+
+  if (clause === "true" || clause === "false") {
+    return { clause: rawClause, section, valid: true as const };
+  }
+
+  if (looksLikeInfix(clause)) {
+    return validationFailure(section, 0, rawClause, "Clause looks like infix syntax. Use SMT-LIB prefix form such as `(> n 0)` instead of `n > 0`.");
+  }
+
+  if (looksLikeNaturalLanguage(clause)) {
+    return validationFailure(section, 0, rawClause, "Clause looks like natural language. The verifier only accepts SMT-LIB boolean expressions.");
+  }
+
+  if (!isWrappedExpression(clause)) {
+    return validationFailure(section, 0, rawClause, "Clause must be wrapped as an SMT-LIB expression like `(= result 0)`.");
+  }
+
+  return { clause: rawClause, section, valid: true as const };
+}
+
 export function assertValidSpecExpressions(input: ClauseSections | PartialClauseSections) {
   for (const section of ["preconditions", "postconditions", "invariants"] as const) {
     const clauses = input[section];
     if (!clauses) continue;
 
     clauses.forEach((rawClause, index) => {
-      const clause = rawClause.trim();
-      if (!clause) {
-        throw invalidClause(section, index, rawClause, "Clause is empty.");
-      }
-
-      if (clause === "true" || clause === "false") return;
-      if (looksLikeInfix(clause)) {
-        throw invalidClause(section, index, rawClause, "Clause looks like infix syntax. Use SMT-LIB prefix form such as `(> n 0)` instead of `n > 0`.");
-      }
-
-      if (looksLikeNaturalLanguage(clause)) {
-        throw invalidClause(section, index, rawClause, "Clause looks like natural language. The verifier only accepts SMT-LIB boolean expressions.");
-      }
-
-      if (!isWrappedExpression(clause)) {
-        throw invalidClause(section, index, rawClause, "Clause must be wrapped as an SMT-LIB expression like `(= result 0)`.");
+      const result = validateSpecClause(rawClause, section);
+      if (!result.valid) {
+        throw invalidClause(section, index, rawClause, result.issue);
       }
     });
   }
+}
+
+function validationFailure(section: ClauseSection, index: number, clause: string, reason: string) {
+  return {
+    clause,
+    section,
+    valid: false as const,
+    issue: `${capitalize(SECTION_LABELS[section])} ${index + 1} is not a valid SMT-LIB boolean expression. ${reason}`,
+    examples: SMT_EXAMPLES,
+    hint: "Use prefix SMT-LIB with parentheses, for example `(and (>= n 0) (<= n 46))`.",
+  };
 }
 
 function invalidClause(section: keyof ClauseSections, index: number, clause: string, reason: string) {

@@ -43,6 +43,28 @@ export const verificationExplanationSchema = z.object({
   explanation: z.string(),
   counterexample: z.string().optional(),
 });
+export const waitForVerificationInputSchema = z.object({
+  jobId: z.string(),
+  timeoutMs: z.number().int().positive().max(30_000).default(5_000),
+  pollIntervalMs: z.number().int().positive().max(1_000).default(100),
+});
+export const waitForVerificationSchema = z.object({
+  job: verificationJobSchema,
+  completed: z.boolean(),
+  waitedMs: z.number().int().nonnegative(),
+});
+export const counterexampleExcerptInputSchema = z.object({
+  jobId: z.string(),
+  maxLines: z.number().int().positive().max(50).default(8),
+});
+export const counterexampleExcerptSchema = z.object({
+  jobId: z.string(),
+  status: jobStatusSchema,
+  hasCounterexample: z.boolean(),
+  excerpt: z.string().optional(),
+  linesShown: z.number().int().nonnegative(),
+  totalLines: z.number().int().nonnegative(),
+});
 
 export type VerificationJob = z.infer<typeof verificationJobSchema>;
 export type StartVerificationInput = z.infer<typeof startVerificationInputSchema>;

@@ -2,13 +2,13 @@ import { resolve } from "node:path";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toolOutputSchema } from "./contracts/errors.js";
-import { specCreateInputSchema, specResultSchema, specUpdateInputSchema, specValidationSchema, specVersionListSchema } from "./contracts/specification.js";
+import { specClauseValidationInputSchema, specClauseValidationSchema, specCreateInputSchema, specResultSchema, specUpdateInputSchema, specValidationSchema, specVersionDiffInputSchema, specVersionDiffSchema, specVersionListSchema } from "./contracts/specification.js";
 import { FileSpecificationRepository } from "./infrastructure/file-specification-repository.js";
 import { SpecificationService } from "./application/specification-service.js";
 import { errorResult, normalizeContractError, runStdio, structuredResult, withTimeout } from "./shared/runtime.js";
 
 const service = new SpecificationService(new FileSpecificationRepository(resolve(process.cwd(), "data/specifications.json")));
-const server = new McpServer({ name: "arm-specification-server", version: "1.2.0" });
+const server = new McpServer({ name: "arm-specification-server", version: "1.3.0" });
 
 server.registerTool("create_spec", { description: "Create a new formal specification version for a function.", inputSchema: specCreateInputSchema, outputSchema: toolOutputSchema(specResultSchema) }, async (args) => {
   try {
@@ -37,6 +37,24 @@ server.registerTool("validate_spec_consistency", { description: "Validate that t
 });
 
 server.registerTool("list_spec_versions", { description: "List all known versions for a function.", inputSchema: z.object({ functionName: z.string() }), outputSchema: toolOutputSchema(specVersionListSchema) }, async ({ functionName }) => structuredResult(`Listed versions for ${functionName}`, { functionName, versions: await service.versions(functionName) }));
+
+server.registerTool("validate_smt_clause", { description: "Validate a single SMT-LIB clause before storing it in a spec.", inputSchema: specClauseValidationInputSchema, outputSchema: toolOutputSchema(specClauseValidationSchema) }, async ({ clause, section }) => {
+  const result = service.validateClause(clause, section);
+  return structuredResult(result.valid ? "Clause is valid SMT-LIB" : result.issue, result);
+});
+
+server.registerTool("diff_spec_versions", { description: "Compare two stored specification versions for the same function.", inputSchema: specVersionDiffInputSchema, outputSchema: toolOutputSchema(specVersionDiffSchema) }, async ({ functionName, fromVersion, toVersion }) => {
+  try {
+    const diff = await service.diff(functionName, fromVersion, toVersion);
+    const summary = diff.changed
+      ? `Compared ${functionName} v${fromVersion} -> v${toVersion}; changed sections: ${diff.changedSections.join(", ")}`
+      : `Compared ${functionName} v${fromVersion} -> v${toVersion}; no clause changes`;
+    return structuredResult(summary, diff);
+  } catch (error) {
+    const contract = normalizeContractError(error);
+    return errorResult(contract.code, contract.message, contract.details, contract.retryable);
+  }
+});
 
 server.registerResource("latest-spec", new ResourceTemplate("spec://functions/{functionName}/latest", {
   list: async () => ({ resources: (await service.listLatest()).map((spec) => ({ uri: `spec://functions/${spec.functionName}/latest`, name: `${spec.functionName} latest spec` })) }),

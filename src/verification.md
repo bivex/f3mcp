@@ -12,6 +12,14 @@ The adapter currently invokes Z3 with CLI flags aligned to the installed 4.15.x 
 - `-nw` to suppress warning noise in tool output;
 - `-model` only on the counterexample pass.
 
+Verification MCP surface highlights:
+
+- `start_verification` runs a spec version through Z3;
+- `get_verification_status` returns the last stored job snapshot;
+- `wait_for_verification` polls until terminal status or timeout;
+- `explain_verification_failure` gives a human-readable verdict;
+- `get_counterexample_excerpt` returns the first few lines of a stored model.
+
 If Z3 launches successfully but rejects the submitted expressions, the tool returns `VALIDATION_FAILED` with the solver's message. A common cause is using infix syntax like `x > 0` instead of SMT-LIB prefix syntax like `(> x 0)`.
 
 ## Supported input style

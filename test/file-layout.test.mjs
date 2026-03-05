@@ -70,11 +70,11 @@ test("server entrypoints expose the intended MCP operations", () => {
   const asmSource = readFileSync("src/assembly.ts", "utf8");
   const perfSource = readFileSync("src/performance.ts", "utf8");
 
-  for (const token of ["create_spec", "update_spec", "validate_spec_consistency", "list_spec_versions"]) {
+  for (const token of ["create_spec", "update_spec", "validate_spec_consistency", "list_spec_versions", "validate_smt_clause", "diff_spec_versions"]) {
     assert.equal(specSource.includes(token), true, `specification.ts should contain ${token}`);
   }
 
-  for (const token of ["start_verification", "get_verification_status", "cancel_verification", "explain_verification_failure"]) {
+  for (const token of ["start_verification", "get_verification_status", "wait_for_verification", "cancel_verification", "explain_verification_failure", "get_counterexample_excerpt"]) {
     assert.equal(verifySource.includes(token), true, `verification.ts should contain ${token}`);
   }
 

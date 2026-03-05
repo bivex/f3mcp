@@ -58,7 +58,7 @@ test("verification server lists tools and proves a valid spec over MCP stdio", a
   await withVerificationClient(seededSpecs, async (client, stderr) => {
     const tools = await client.listTools();
     const toolNames = tools.tools.map((tool) => tool.name).sort();
-    assert.deepEqual(toolNames, ["cancel_verification", "explain_verification_failure", "get_verification_status", "start_verification"]);
+    assert.deepEqual(toolNames, ["cancel_verification", "explain_verification_failure", "get_counterexample_excerpt", "get_verification_status", "start_verification", "wait_for_verification"]);
     assert.equal(Boolean(tools.tools.find((tool) => tool.name === "start_verification")?.outputSchema), true);
 
     const start = await client.callTool({ name: "start_verification", arguments: { functionName: "prove_positive", specVersion: 1 } });
@@ -72,6 +72,10 @@ test("verification server lists tools and proves a valid spec over MCP stdio", a
     assert.notEqual(status.isError, true, stderr.join(""));
     assert.equal(status.structuredContent.job.status, "passed");
     assert.match(status.content[0].text, /function: prove_positive/u);
+
+    const waited = await client.callTool({ name: "wait_for_verification", arguments: { jobId: start.structuredContent.job.jobId, timeoutMs: 50, pollIntervalMs: 5 } });
+    assert.equal(waited.structuredContent.completed, true);
+    assert.match(waited.content[0].text, /completed: true/u);
   });
 });
 
@@ -90,6 +94,12 @@ test("verification server returns counterexamples and structured errors over MCP
     assert.equal(typeof explain.structuredContent.counterexample, "string");
     assert.match(explain.content[0].text, /summary: Z3 found a counterexample/u);
     assert.match(explain.content[0].text, /counterexample: available/u);
+
+    const excerpt = await client.callTool({ name: "get_counterexample_excerpt", arguments: { jobId: start.structuredContent.job.jobId, maxLines: 2 } });
+    assert.notEqual(excerpt.isError, true, stderr.join(""));
+    assert.equal(excerpt.structuredContent.hasCounterexample, true);
+    assert.equal(excerpt.structuredContent.linesShown, 2);
+    assert.match(excerpt.structuredContent.excerpt, /define-fun x/u);
 
     const cancel = await client.callTool({ name: "cancel_verification", arguments: { jobId: start.structuredContent.job.jobId } });
     assert.equal(cancel.isError, true);

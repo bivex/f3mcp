@@ -2,6 +2,13 @@
 
 This repository contains four MCP stdio servers for ARM specification, verification, assembly analysis, and performance checks.
 
+Recent additions include:
+
+- `validate_smt_clause` to check a single SMT-LIB clause before storing it;
+- `diff_spec_versions` to compare two stored spec revisions;
+- `wait_for_verification` to poll a verification job to completion;
+- `get_counterexample_excerpt` to retrieve the first lines of a stored model.
+
 ## Who these MCP servers are for
 
 These servers are most useful for:

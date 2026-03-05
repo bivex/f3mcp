@@ -61,6 +61,24 @@ export class VerificationService {
     return this.jobs.get(jobId);
   }
 
+  async waitForCompletion(jobId: string, timeoutMs = 5_000, pollIntervalMs = 100) {
+    const startedAt = Date.now();
+    let job = await this.jobs.get(jobId);
+    if (!job) return null;
+
+    while (!isTerminalStatus(job.status) && Date.now() - startedAt < timeoutMs) {
+      await sleep(Math.min(pollIntervalMs, timeoutMs));
+      job = await this.jobs.get(jobId);
+      if (!job) return null;
+    }
+
+    return {
+      job,
+      completed: isTerminalStatus(job.status),
+      waitedMs: Math.max(0, Date.now() - startedAt),
+    };
+  }
+
   async cancel(jobId: string) {
     const job = await this.jobs.get(jobId);
     if (!job) return null;
@@ -85,5 +103,32 @@ export class VerificationService {
   list() {
     return this.jobs.list();
   }
+
+  async getCounterexampleExcerpt(jobId: string, maxLines = 8) {
+    const job = await this.jobs.get(jobId);
+    if (!job) return null;
+
+    const lines = (job.counterexample ?? "")
+      .split(/\r?\n/u)
+      .map((line) => line.trimEnd())
+      .filter(Boolean);
+
+    return {
+      jobId,
+      status: job.status,
+      hasCounterexample: lines.length > 0,
+      excerpt: lines.slice(0, maxLines).join("\n") || undefined,
+      linesShown: Math.min(lines.length, maxLines),
+      totalLines: lines.length,
+    };
+  }
+}
+
+function isTerminalStatus(status: VerificationJob["status"]) {
+  return status === "passed" || status === "failed" || status === "cancelled";
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 

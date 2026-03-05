@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { textResult, structuredResult, normalizeContractError, errorResult, withTimeout, runStdio } from "../build/shared/runtime.js";
 import { readJsonFile, writeJsonFile, updateJsonFile } from "../build/shared/file-store.js";
-import { assertValidSpecExpressions } from "../build/shared/spec-expression-validation.js";
+import { assertValidSpecExpressions, validateSpecClause } from "../build/shared/spec-expression-validation.js";
 import { FileSpecificationRepository } from "../build/infrastructure/file-specification-repository.js";
 import { FileInstructionCatalog } from "../build/infrastructure/file-instruction-catalog.js";
 import { FilePerformanceReportStore } from "../build/infrastructure/file-performance-report-store.js";
@@ -73,6 +73,8 @@ test("file-store reads fallback, writes json, updates content, and rethrows inva
 
 test("spec expression validation, repository, and specification service cover valid and invalid flows", async () => {
   assert.doesNotThrow(() => assertValidSpecExpressions({ preconditions: ["true", "(> n 0)"], postconditions: ["(= result 1)"], invariants: ["false"] }));
+  assert.deepEqual(validateSpecClause("(= result 1)", "postconditions"), { clause: "(= result 1)", section: "postconditions", valid: true });
+  assert.equal(validateSpecClause("result == 1", "postconditions").valid, false);
   assert.throws(() => assertValidSpecExpressions({ preconditions: ["n > 0"], postconditions: [], invariants: [] }), (error) => error?.code === "VALIDATION_FAILED" && error?.details?.section === "preconditions");
   assert.throws(() => assertValidSpecExpressions({ preconditions: [], postconditions: ["result is fibonacci of n"], invariants: [] }), (error) => error?.code === "VALIDATION_FAILED" && error?.details?.section === "postconditions");
   assert.throws(() => assertValidSpecExpressions({ preconditions: [], postconditions: [], invariants: ["  "] }), (error) => error?.code === "VALIDATION_FAILED" && error?.details?.section === "invariants");
@@ -101,6 +103,14 @@ test("spec expression validation, repository, and specification service cover va
     assert.deepEqual(await service.validate("missing_fn"), null);
     assert.deepEqual(await service.validate("sum_positive"), { functionName: "sum_positive", valid: true, issues: [] });
     assert.deepEqual(await service.validate("partial_fn"), { functionName: "partial_fn", valid: false, issues: ["Missing invariants"] });
+    assert.equal(service.validateClause("(>= result 0)").valid, true);
+
+    const diff = await service.diff("sum_positive", 1, 2);
+    assert.equal(diff.changed, true);
+    assert.deepEqual(diff.changedSections, ["invariants"]);
+    assert.deepEqual(diff.diff.invariants.added, ["(>= x 1)"]);
+    assert.deepEqual(diff.diff.preconditions.unchanged, ["(> x 0)"]);
+    await assert.rejects(() => service.diff("sum_positive", 9, 2), (error) => error?.code === "SPEC_VERSION_NOT_FOUND");
   });
 });
 
