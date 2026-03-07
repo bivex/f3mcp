@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "arm-specification": {
+      "command": "node",
+      "args": ["C:\\augment\\f3mcp\\build\\specification.js"],
+      "cwd": "C:\\augment\\f3mcp"
+    },
+    "arm-verification": {
+      "command": "node",
+      "args": ["C:\\augment\\f3mcp\\build\\verification.js"],
+      "cwd": "C:\\augment\\f3mcp"
+    },
+    "arm-assembly": {
+      "command": "node",
+      "args": ["C:\\augment\\f3mcp\\build\\assembly.js"],
+      "cwd": "C:\\augment\\f3mcp"
+    },
+    "arm-performance": {
+      "command": "node",
+      "args": ["C:\\augment\\f3mcp\\build\\performance.js"],
+      "cwd": "C:\\augment\\f3mcp"
+    }
+  }
+}
