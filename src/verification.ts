@@ -28,12 +28,16 @@ import { errorResult, normalizeContractError, runStdio, structuredResult, withTi
 const specs = new FileSpecificationRepository(resolve(process.cwd(), "data/specifications.json"));
 const jobs = new FileVerificationJobRepository(resolve(process.cwd(), "data/verification-jobs.json"));
 const resolveZ3Binary = () => {
+  const bundledWindowsZ3 = process.platform === "win32"
+    ? resolve(process.cwd(), "z3-4.16.0-x64-win", "bin", "z3.exe")
+    : undefined;
   const pathEntries = (process.env.PATH ?? process.env.Path ?? "").split(delimiter).filter(Boolean);
   const windowsCandidates = process.platform === "win32"
     ? pathEntries.flatMap((entry) => [resolve(entry, "z3.exe"), resolve(entry, "z3")])
     : [];
   const candidates = [
     process.env.Z3_BINARY,
+    bundledWindowsZ3,
     ...windowsCandidates,
     "/opt/homebrew/bin/z3",
     "/usr/local/bin/z3",
