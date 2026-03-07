@@ -49,9 +49,19 @@ async function withVerificationClient(specifications, run) {
 }
 
 const seededSpecs = {
-  prove_positive: [{ functionName: "prove_positive", version: 1, preconditions: ["(> x 0)"], postconditions: ["(> x 0)"], invariants: [], updatedAt: new Date().toISOString() }],
-  needs_stronger_post: [{ functionName: "needs_stronger_post", version: 1, preconditions: ["(> x 0)"], postconditions: ["(> x 10)"], invariants: [], updatedAt: new Date().toISOString() }],
-  invalid_smt: [{ functionName: "invalid_smt", version: 1, preconditions: ["x > 0"], postconditions: ["x > 0"], invariants: [], updatedAt: new Date().toISOString() }],
+  prove_positive: [{ functionName: "prove_positive", version: 1, declarations: [], preconditions: ["(> x 0)"], postconditions: ["(> x 0)"], invariants: [], verificationMode: "prove", updatedAt: new Date().toISOString() }],
+  needs_stronger_post: [{ functionName: "needs_stronger_post", version: 1, declarations: [], preconditions: ["(> x 0)"], postconditions: ["(> x 10)"], invariants: [], verificationMode: "prove", updatedAt: new Date().toISOString() }],
+  invalid_smt: [{ functionName: "invalid_smt", version: 1, declarations: [], preconditions: ["x > 0"], postconditions: ["x > 0"], invariants: [], verificationMode: "prove", updatedAt: new Date().toISOString() }],
+  bitvec_model_search: [{
+    functionName: "bitvec_model_search",
+    version: 1,
+    declarations: ["(declare-const x (_ BitVec 32))", "(declare-const y (_ BitVec 32))"],
+    preconditions: ["(distinct x y)"],
+    postconditions: ["(= ((_ extract 15 0) x) ((_ extract 15 0) y))"],
+    invariants: [],
+    verificationMode: "find-model",
+    updatedAt: new Date().toISOString(),
+  }],
 };
 
 test("verification server lists tools and proves a valid spec over MCP stdio", async () => {
@@ -113,6 +123,34 @@ test("verification server surfaces invalid SMT-LIB as validation errors over MCP
     assert.equal(start.isError, true, stderr.join(""));
     assert.equal(start.structuredContent.error.code, "VALIDATION_FAILED");
     assert.match(start.structuredContent.error.message, /invalid assert command|rejected the generated SMT-LIB/i);
+  });
+});
+
+test("verification server finds satisfying BitVec models over MCP stdio", async () => {
+  await withVerificationClient(seededSpecs, async (client, stderr) => {
+    const start = await client.callTool({ name: "start_verification", arguments: { functionName: "bitvec_model_search", specVersion: 1 } });
+    assert.notEqual(start.isError, true, stderr.join(""));
+    assert.equal(start.structuredContent.job.status, "passed");
+    assert.equal(start.structuredContent.job.verificationMode, "find-model");
+    assert.equal(start.structuredContent.job.solverStatus, "sat");
+    assert.equal(start.structuredContent.job.evidenceKind, "model");
+    assert.match(start.structuredContent.job.counterexample, /define-fun [xy]/u);
+    assert.match(start.content[0].text, /verificationMode: find-model/u);
+    assert.match(start.content[0].text, /model: available/u);
+
+    const explain = await client.callTool({ name: "explain_verification_failure", arguments: { jobId: start.structuredContent.job.jobId } });
+    assert.notEqual(explain.isError, true, stderr.join(""));
+    assert.equal(explain.structuredContent.verificationMode, "find-model");
+    assert.equal(explain.structuredContent.evidenceKind, "model");
+    assert.match(explain.structuredContent.explanation, /satisfying model/u);
+    assert.match(explain.content[0].text, /model: available/u);
+
+    const excerpt = await client.callTool({ name: "get_counterexample_excerpt", arguments: { jobId: start.structuredContent.job.jobId, maxLines: 2 } });
+    assert.notEqual(excerpt.isError, true, stderr.join(""));
+    assert.equal(excerpt.structuredContent.verificationMode, "find-model");
+    assert.equal(excerpt.structuredContent.evidenceKind, "model");
+    assert.equal(excerpt.structuredContent.hasCounterexample, true);
+    assert.match(excerpt.structuredContent.excerpt, /define-fun [xy]/u);
   });
 });
 

@@ -16,28 +16,35 @@
 import { z } from "zod";
 
 export const clauseSectionSchema = z.enum(["preconditions", "postconditions", "invariants"]);
+export const verificationModeSchema = z.enum(["prove", "find-model"]);
 
 export const specSchema = z.object({
   functionName: z.string(),
   version: z.number().int().positive(),
+  declarations: z.array(z.string()).default([]),
   preconditions: z.array(z.string()),
   postconditions: z.array(z.string()),
   invariants: z.array(z.string()),
+  verificationMode: verificationModeSchema.default("prove"),
   updatedAt: z.string(),
 });
 
 export const specCreateInputSchema = z.object({
   functionName: z.string(),
+  declarations: z.array(z.string()).default([]),
   preconditions: z.array(z.string()).default([]),
   postconditions: z.array(z.string()).default([]),
   invariants: z.array(z.string()).default([]),
+  verificationMode: verificationModeSchema.default("prove"),
 });
 
 export const specUpdateInputSchema = z.object({
   functionName: z.string(),
+  declarations: z.array(z.string()).optional(),
   preconditions: z.array(z.string()).optional(),
   postconditions: z.array(z.string()).optional(),
   invariants: z.array(z.string()).optional(),
+  verificationMode: verificationModeSchema.optional(),
 });
 
 export const specResultSchema = z.object({ spec: specSchema });

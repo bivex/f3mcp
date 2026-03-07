@@ -29,7 +29,7 @@ export interface VerificationJobRepository {
 }
 
 export interface ProofEngine {
-  verify(spec: Spec): Promise<Pick<VerificationJob, "engine" | "solverStatus" | "status" | "failureReason" | "counterexample">>;
+  verify(spec: Spec): Promise<Pick<VerificationJob, "engine" | "solverStatus" | "status" | "failureReason" | "counterexample" | "evidenceKind">>;
 }
 
 export class VerificationService {
@@ -52,6 +52,7 @@ export class VerificationService {
       functionName,
       specVersion,
       createdAt: new Date().toISOString(),
+      verificationMode: spec.verificationMode ?? "prove",
       ...proof,
     };
     return this.jobs.save(job);
@@ -91,11 +92,16 @@ export class VerificationService {
   async explain(jobId: string): Promise<VerificationExplanation | null> {
     const job = await this.jobs.get(jobId);
     if (!job) return null;
+    const verificationMode = job.verificationMode ?? "prove";
     return {
       jobId,
       status: job.status,
       engine: job.engine,
-      explanation: job.failureReason ?? "Verification passed with no counterexample.",
+      verificationMode,
+      explanation: job.failureReason ?? (verificationMode === "find-model"
+        ? "Verification found no satisfying model."
+        : "Verification passed with no counterexample."),
+      evidenceKind: job.evidenceKind,
       counterexample: job.counterexample,
     };
   }
@@ -116,6 +122,8 @@ export class VerificationService {
     return {
       jobId,
       status: job.status,
+      verificationMode: job.verificationMode ?? "prove",
+      evidenceKind: job.evidenceKind,
       hasCounterexample: lines.length > 0,
       excerpt: lines.slice(0, maxLines).join("\n") || undefined,
       linesShown: Math.min(lines.length, maxLines),

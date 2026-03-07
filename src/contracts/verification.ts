@@ -14,9 +14,11 @@
  */
 
 import { z } from "zod";
+import { verificationModeSchema } from "./specification.js";
 
 export const solverStatusSchema = z.enum(["sat", "unsat", "unknown"]);
 export const jobStatusSchema = z.enum(["queued", "running", "passed", "failed", "cancelled"]);
+export const verificationEvidenceKindSchema = z.enum(["counterexample", "model"]);
 
 export const verificationJobSchema = z.object({
   jobId: z.string(),
@@ -25,8 +27,10 @@ export const verificationJobSchema = z.object({
   status: jobStatusSchema,
   createdAt: z.string(),
   engine: z.string(),
+  verificationMode: verificationModeSchema.optional(),
   solverStatus: solverStatusSchema.optional(),
   failureReason: z.string().optional(),
+  evidenceKind: verificationEvidenceKindSchema.optional(),
   counterexample: z.string().optional(),
 });
 
@@ -40,7 +44,9 @@ export const verificationExplanationSchema = z.object({
   jobId: z.string(),
   status: jobStatusSchema,
   engine: z.string(),
+  verificationMode: verificationModeSchema.optional(),
   explanation: z.string(),
+  evidenceKind: verificationEvidenceKindSchema.optional(),
   counterexample: z.string().optional(),
 });
 export const waitForVerificationInputSchema = z.object({
@@ -60,6 +66,8 @@ export const counterexampleExcerptInputSchema = z.object({
 export const counterexampleExcerptSchema = z.object({
   jobId: z.string(),
   status: jobStatusSchema,
+  verificationMode: verificationModeSchema.optional(),
+  evidenceKind: verificationEvidenceKindSchema.optional(),
   hasCounterexample: z.boolean(),
   excerpt: z.string().optional(),
   linesShown: z.number().int().nonnegative(),

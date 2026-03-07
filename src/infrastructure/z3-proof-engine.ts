@@ -18,7 +18,12 @@ import type { Spec } from "../contracts/specification.js";
 import { contractError } from "../contracts/errors.js";
 import type { ProofEngine } from "../application/verification-service.js";
 
-const RESERVED = new Set(["and", "or", "not", "=>", "=", "<", ">", "<=", ">=", "+", "-", "*", "div", "mod", "true", "false"]);
+const RESERVED = new Set([
+  "and", "or", "not", "=>", "=", "<", ">", "<=", ">=", "+", "-", "*", "div", "mod", "true", "false",
+  "distinct", "ite", "let", "exists", "forall", "Int", "Bool", "Array", "BitVec", "assert",
+  "bvmul", "bvadd", "bvsub", "bvand", "bvor", "bvxor", "bvnot", "bvneg", "bvshl", "bvlshr", "bvashr",
+  "concat", "extract", "zero_extend", "sign_extend", "rotate_left", "rotate_right", "declare", "const", "fun", "_",
+]);
 
 export class Z3ProofEngine implements ProofEngine {
   constructor(private readonly binaryPath = "z3", private readonly timeoutMs = 3_000) {}
@@ -28,8 +33,32 @@ export class Z3ProofEngine implements ProofEngine {
       return { engine: "z3", solverStatus: "unknown" as const, status: "failed" as const, failureReason: "No postconditions were provided for verification." };
     }
 
-    const declarations = this.inferDeclarations([...spec.preconditions, ...spec.invariants, ...spec.postconditions]);
+    const declarations = [...(spec.declarations ?? []), ...this.inferDeclarations([...spec.preconditions, ...spec.invariants, ...spec.postconditions], spec.declarations ?? [])];
     const assumptions = [...spec.preconditions, ...spec.invariants];
+
+    if ((spec.verificationMode ?? "prove") === "find-model") {
+      const witness = await this.runZ3(this.buildScript(declarations, [...assumptions, ...spec.postconditions]), true);
+      if (witness.status === "sat") {
+        return {
+          engine: "z3",
+          solverStatus: witness.status,
+          status: "passed" as const,
+          failureReason: "Z3 found a satisfying model for the specification constraints.",
+          evidenceKind: "model" as const,
+          counterexample: witness.model,
+        };
+      }
+      if (witness.status === "unsat") {
+        return {
+          engine: "z3",
+          solverStatus: witness.status,
+          status: "failed" as const,
+          failureReason: "No satisfying assignment exists for the specification constraints.",
+        };
+      }
+      throw contractError("SOLVER_UNKNOWN", "Z3 returned unknown while searching for a satisfying model.", { retryable: true, details: witness.output });
+    }
+
     const consistency = await this.runZ3(this.buildScript(declarations, [...assumptions, ...spec.postconditions]));
     if (consistency.status === "unsat") {
       return { engine: "z3", solverStatus: consistency.status, status: "failed" as const, failureReason: "The specification is internally inconsistent." };
@@ -45,17 +74,26 @@ export class Z3ProofEngine implements ProofEngine {
     }
     if (proof.status === "sat") {
       const model = await this.runZ3(this.buildScript(declarations, [...assumptions, negatedPost]), true);
-      return { engine: "z3", solverStatus: proof.status, status: "failed" as const, failureReason: "Z3 found a counterexample that violates the postconditions.", counterexample: model.model };
+      return {
+        engine: "z3",
+        solverStatus: proof.status,
+        status: "failed" as const,
+        failureReason: "Z3 found a counterexample that violates the postconditions.",
+        evidenceKind: "counterexample" as const,
+        counterexample: model.model,
+      };
     }
     throw contractError("SOLVER_UNKNOWN", "Z3 returned unknown for the proof obligation.", { retryable: true, details: proof.output });
   }
 
-  private inferDeclarations(expressions: string[]) {
+  private inferDeclarations(expressions: string[], explicitDeclarations: string[] = []) {
+    const declaredSymbols = new Set(explicitDeclarations.map((declaration) => declaration.match(/^\(declare-(?:const|fun)\s+([A-Za-z_][A-Za-z0-9_]*)\b/u)?.[1]).filter(Boolean));
     const symbols = new Set<string>();
     for (const expr of expressions) {
       for (const match of expr.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
         const symbol = match[0];
-        if (!RESERVED.has(symbol)) symbols.add(symbol);
+        if ((match.index ?? 0) > 0 && expr[(match.index ?? 0) - 1] === "#") continue;
+        if (!RESERVED.has(symbol) && !declaredSymbols.has(symbol)) symbols.add(symbol);
       }
     }
     return [...symbols].sort().map((symbol) => `(declare-const ${symbol} Int)`);

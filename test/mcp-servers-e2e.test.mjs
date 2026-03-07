@@ -81,13 +81,17 @@ test("specification server exposes tools, resources, prompts, and missing-spec e
       name: "create_spec",
       arguments: {
         functionName: "demo_fn",
+        declarations: ["(declare-const x (_ BitVec 32))"],
         preconditions: ["(> x 0)"],
         postconditions: ["(> x 0)"],
         invariants: [],
+        verificationMode: "find-model",
       },
     });
     assert.notEqual(created.isError, true, stderr.join(""));
     assert.equal(created.structuredContent.spec.version, 1);
+    assert.deepEqual(created.structuredContent.spec.declarations, ["(declare-const x (_ BitVec 32))"]);
+    assert.equal(created.structuredContent.spec.verificationMode, "find-model");
     assert.match(created.content[0].text, /Created spec v1 for demo_fn/u);
 
     const invalid = await client.callTool({
@@ -107,11 +111,13 @@ test("specification server exposes tools, resources, prompts, and missing-spec e
 
     const updated = await client.callTool({
       name: "update_spec",
-      arguments: { functionName: "demo_fn", invariants: ["(>= x 1)"] },
+      arguments: { functionName: "demo_fn", invariants: ["(>= x 1)"], verificationMode: "prove" },
     });
     assert.notEqual(updated.isError, true, stderr.join(""));
     assert.equal(updated.structuredContent.spec.version, 2);
     assert.deepEqual(updated.structuredContent.spec.invariants, ["(>= x 1)"]);
+    assert.deepEqual(updated.structuredContent.spec.declarations, ["(declare-const x (_ BitVec 32))"]);
+    assert.equal(updated.structuredContent.spec.verificationMode, "prove");
 
     const missing = await client.callTool({
       name: "validate_spec_consistency",
@@ -153,6 +159,7 @@ test("specification server exposes tools, resources, prompts, and missing-spec e
     const latest = await client.readResource({ uri: "spec://functions/demo_fn/latest" });
     const latestSpec = JSON.parse(latest.contents[0].text);
     assert.equal(latestSpec.version, 2);
+    assert.equal(latestSpec.verificationMode, "prove");
 
     const prompts = await client.listPrompts();
     assert.deepEqual(prompts.prompts.map((prompt) => prompt.name), ["review_spec"]);

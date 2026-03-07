@@ -25,7 +25,7 @@ export class FileSpecificationRepository implements SpecificationRepository {
   async create(input: CreateSpecInput): Promise<Spec> {
     const store = await this.readStore();
     const version = (store[input.functionName]?.length ?? 0) + 1;
-    const spec: Spec = { ...input, version, updatedAt: new Date().toISOString() };
+    const spec: Spec = normalizeSpec({ ...input, version, updatedAt: new Date().toISOString() });
     store[input.functionName] = [...(store[input.functionName] ?? []), spec];
     await writeJsonFile(this.filePath, store);
     return spec;
@@ -36,9 +36,11 @@ export class FileSpecificationRepository implements SpecificationRepository {
     if (!current) return null;
     return this.create({
       functionName: current.functionName,
+      declarations: input.declarations ?? current.declarations,
       preconditions: input.preconditions ?? current.preconditions,
       postconditions: input.postconditions ?? current.postconditions,
       invariants: input.invariants ?? current.invariants,
+      verificationMode: input.verificationMode ?? current.verificationMode,
     });
   }
 
@@ -59,7 +61,22 @@ export class FileSpecificationRepository implements SpecificationRepository {
   }
 
   private readStore() {
-    return readJsonFile<SpecStore>(this.filePath, {});
+    return readJsonFile<Record<string, Array<Partial<Spec>>>>(this.filePath, {}).then((store) => Object.fromEntries(
+      Object.entries(store).map(([functionName, versions]) => [functionName, versions.map((spec) => normalizeSpec(spec))]),
+    ));
   }
+}
+
+function normalizeSpec(spec: Partial<Spec>): Spec {
+  return {
+    functionName: spec.functionName ?? "",
+    version: spec.version ?? 0,
+    declarations: Array.isArray(spec.declarations) ? spec.declarations : [],
+    preconditions: Array.isArray(spec.preconditions) ? spec.preconditions : [],
+    postconditions: Array.isArray(spec.postconditions) ? spec.postconditions : [],
+    invariants: Array.isArray(spec.invariants) ? spec.invariants : [],
+    verificationMode: spec.verificationMode ?? "prove",
+    updatedAt: spec.updatedAt ?? new Date(0).toISOString(),
+  };
 }
 

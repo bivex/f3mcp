@@ -86,13 +86,26 @@ test("spec expression validation, repository, and specification service cover va
 
     await assert.rejects(() => service.create({ functionName: "fib_bad", preconditions: ["n >= 0"], postconditions: ["result == 1"], invariants: [] }), (error) => error?.code === "VALIDATION_FAILED");
 
-    const v1 = await service.create({ functionName: "sum_positive", preconditions: ["(> x 0)"], postconditions: ["(> result 0)"], invariants: ["(>= result 1)"] });
+    const v1 = await service.create({
+      functionName: "sum_positive",
+      declarations: ["(declare-const x Int)", "(declare-const result Int)"],
+      preconditions: ["(> x 0)"],
+      postconditions: ["(> result 0)"],
+      invariants: ["(>= result 1)"],
+      verificationMode: "prove",
+    });
     const v2 = await service.update({ functionName: "sum_positive", invariants: ["(>= result 1)", "(>= x 1)"] });
     const partial = await service.create({ functionName: "partial_fn", preconditions: ["(>= n 0)"], postconditions: ["(>= result 0)"], invariants: [] });
 
     assert.equal(v1.version, 1);
     assert.equal(v2.version, 2);
     assert.equal(partial.version, 1);
+    assert.deepEqual(v1.declarations, ["(declare-const x Int)", "(declare-const result Int)"]);
+    assert.equal(v1.verificationMode, "prove");
+    assert.deepEqual(v2.declarations, v1.declarations);
+    assert.equal(v2.verificationMode, "prove");
+    assert.deepEqual(partial.declarations, []);
+    assert.equal(partial.verificationMode, "prove");
     assert.equal(await service.update({ functionName: "missing_fn" }), null);
 
     assert.equal((await service.latest("sum_positive")).version, 2);

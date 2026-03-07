@@ -57,25 +57,27 @@ const resolveZ3Binary = () => {
 const verification = new VerificationService(specs, jobs, new Z3ProofEngine(resolveZ3Binary(), 3_000));
 const server = new McpServer({ name: "arm-verification-server", version: "1.3.0" });
 
-function describeJob(job: { jobId: string; functionName: string; specVersion: number; status: string; solverStatus?: string; failureReason?: string; counterexample?: string }) {
+function describeJob(job: { jobId: string; functionName: string; specVersion: number; status: string; verificationMode?: string; solverStatus?: string; failureReason?: string; evidenceKind?: string; counterexample?: string }) {
   return [
     `Verification job ${job.jobId}`,
     `function: ${job.functionName}`,
     `specVersion: ${job.specVersion}`,
     `status: ${job.status}`,
+    `verificationMode: ${job.verificationMode ?? "prove"}`,
     job.solverStatus ? `solverStatus: ${job.solverStatus}` : null,
     job.failureReason ? `failureReason: ${job.failureReason}` : null,
-    job.counterexample ? "counterexample: available" : null,
+    job.counterexample ? `${job.evidenceKind === "model" ? "model" : "counterexample"}: available` : null,
   ].filter(Boolean).join("\n");
 }
 
-function describeExplanation(explanation: { jobId: string; status: string; engine: string; explanation: string; counterexample?: string }) {
+function describeExplanation(explanation: { jobId: string; status: string; engine: string; verificationMode?: string; explanation: string; evidenceKind?: string; counterexample?: string }) {
   return [
     `Verification explanation for ${explanation.jobId}`,
     `status: ${explanation.status}`,
     `engine: ${explanation.engine}`,
+    `verificationMode: ${explanation.verificationMode ?? "prove"}`,
     `summary: ${explanation.explanation}`,
-    explanation.counterexample ? "counterexample: available" : null,
+    explanation.counterexample ? `${explanation.evidenceKind === "model" ? "model" : "counterexample"}: available` : null,
   ].filter(Boolean).join("\n");
 }
 
@@ -88,10 +90,12 @@ function describeWaitResult(result: { job: { jobId: string; status: string }; co
   ].join("\n");
 }
 
-function describeCounterexampleExcerpt(result: { jobId: string; status: string; hasCounterexample: boolean; excerpt?: string; linesShown: number; totalLines: number }) {
+function describeCounterexampleExcerpt(result: { jobId: string; status: string; verificationMode?: string; evidenceKind?: string; hasCounterexample: boolean; excerpt?: string; linesShown: number; totalLines: number }) {
   return [
     `Counterexample excerpt for ${result.jobId}`,
     `status: ${result.status}`,
+    `verificationMode: ${result.verificationMode ?? "prove"}`,
+    result.evidenceKind ? `evidenceKind: ${result.evidenceKind}` : null,
     `hasCounterexample: ${result.hasCounterexample}`,
     `linesShown: ${result.linesShown}`,
     `totalLines: ${result.totalLines}`,

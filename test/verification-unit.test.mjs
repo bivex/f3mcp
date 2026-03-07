@@ -110,9 +110,11 @@ test("VerificationService creates a new job and explains failures with counterex
   const spec = {
     functionName: "demo_fn",
     version: 3,
+    declarations: [],
     preconditions: ["(>= n 0)"],
     postconditions: ["(>= result 0)"],
     invariants: ["(>= result 0)"],
+    verificationMode: "prove",
     updatedAt: new Date().toISOString(),
   };
   const jobs = [];
@@ -153,6 +155,7 @@ test("VerificationService creates a new job and explains failures with counterex
   assert.equal(job.functionName, "demo_fn");
   assert.equal(job.specVersion, 3);
   assert.equal(job.status, "failed");
+  assert.equal(job.verificationMode, "prove");
   assert.equal(job.counterexample, "(model (define-fun n () Int 7))");
 
   const explanation = await service.explain(job.jobId);
@@ -214,6 +217,8 @@ test("VerificationService wait and counterexample helpers cover missing and non-
   assert.deepEqual(emptyExcerpt, {
     jobId: "job_running",
     status: "running",
+    verificationMode: "prove",
+    evidenceKind: undefined,
     hasCounterexample: false,
     excerpt: undefined,
     linesShown: 0,
@@ -287,15 +292,17 @@ test("Z3ProofEngine covers empty postconditions, inconsistent specs, and counter
   const passed = await engine.verify({
     functionName: "passed",
     version: 1,
+    declarations: [],
     preconditions: ["(> x 0)"],
     postconditions: ["(> x 0)"],
     invariants: [],
+    verificationMode: "prove",
     updatedAt: new Date().toISOString(),
   });
   assert.deepEqual(passed, { engine: "z3", solverStatus: "unsat", status: "passed" });
 
   assert.deepEqual(
-    await engine.verify({ functionName: "no_posts", version: 1, preconditions: ["(>= x 0)"], postconditions: [], invariants: [], updatedAt: new Date().toISOString() }),
+    await engine.verify({ functionName: "no_posts", version: 1, declarations: [], preconditions: ["(>= x 0)"], postconditions: [], invariants: [], verificationMode: "prove", updatedAt: new Date().toISOString() }),
     {
       engine: "z3",
       solverStatus: "unknown",
@@ -307,9 +314,11 @@ test("Z3ProofEngine covers empty postconditions, inconsistent specs, and counter
   const inconsistent = await engine.verify({
     functionName: "inconsistent",
     version: 1,
+    declarations: [],
     preconditions: ["(> x 0)", "(< x 0)"],
     postconditions: ["(> x 1)"],
     invariants: [],
+    verificationMode: "prove",
     updatedAt: new Date().toISOString(),
   });
   assert.equal(inconsistent.status, "failed");
@@ -319,22 +328,54 @@ test("Z3ProofEngine covers empty postconditions, inconsistent specs, and counter
   const counterexample = await engine.verify({
     functionName: "counterexample",
     version: 1,
+    declarations: [],
     preconditions: ["(>= n 0)", "(= result n)"],
     postconditions: ["(>= result 0)", "(<= result 0)"],
     invariants: [],
+    verificationMode: "prove",
     updatedAt: new Date().toISOString(),
   });
   assert.equal(counterexample.status, "failed");
   assert.equal(counterexample.solverStatus, "sat");
   assert.match(counterexample.failureReason, /counterexample/u);
   assert.match(counterexample.counterexample ?? "", /define-fun/u);
+
+  const foundModel = await engine.verify({
+    functionName: "find_model_bitvec",
+    version: 1,
+    declarations: ["(declare-const x (_ BitVec 32))", "(declare-const y (_ BitVec 32))"],
+    preconditions: ["(distinct x y)"],
+    postconditions: ["(= ((_ extract 15 0) x) ((_ extract 15 0) y))"],
+    invariants: [],
+    verificationMode: "find-model",
+    updatedAt: new Date().toISOString(),
+  });
+  assert.equal(foundModel.status, "passed");
+  assert.equal(foundModel.solverStatus, "sat");
+  assert.equal(foundModel.evidenceKind, "model");
+  assert.match(foundModel.failureReason ?? "", /satisfying model/u);
+  assert.match(foundModel.counterexample ?? "", /define-fun/u);
+
+  const noModel = await engine.verify({
+    functionName: "find_model_unsat",
+    version: 1,
+    declarations: ["(declare-const x (_ BitVec 32))", "(declare-const y (_ BitVec 32))"],
+    preconditions: ["(distinct x y)"],
+    postconditions: ["(= x y)"],
+    invariants: [],
+    verificationMode: "find-model",
+    updatedAt: new Date().toISOString(),
+  });
+  assert.equal(noModel.status, "failed");
+  assert.equal(noModel.solverStatus, "unsat");
+  assert.match(noModel.failureReason ?? "", /No satisfying assignment/u);
 });
 
 test("Z3ProofEngine handles unknown solver states and exposes helper internals", async () => {
   const consistencyUnknown = new Z3ProofEngine(systemZ3, 500);
   consistencyUnknown.runZ3 = async () => ({ status: "unknown", output: "consistency unknown" });
   await assert.rejects(
-    () => consistencyUnknown.verify({ functionName: "unknown_consistency", version: 1, preconditions: ["(> x 0)"], postconditions: ["(> x 0)"], invariants: [], updatedAt: new Date().toISOString() }),
+    () => consistencyUnknown.verify({ functionName: "unknown_consistency", version: 1, declarations: [], preconditions: ["(> x 0)"], postconditions: ["(> x 0)"], invariants: [], verificationMode: "prove", updatedAt: new Date().toISOString() }),
     (error) => error?.code === "SOLVER_UNKNOWN" && /consistency check/u.test(error?.message ?? "") && error?.details === "consistency unknown",
   );
 
@@ -345,12 +386,29 @@ test("Z3ProofEngine handles unknown solver states and exposes helper internals",
     return calls === 1 ? { status: "sat", output: "ok" } : { status: "unknown", output: "proof unknown" };
   };
   await assert.rejects(
-    () => proofUnknown.verify({ functionName: "unknown_proof", version: 1, preconditions: ["(> x 0)"], postconditions: ["(> x 0)"], invariants: [], updatedAt: new Date().toISOString() }),
+    () => proofUnknown.verify({ functionName: "unknown_proof", version: 1, declarations: [], preconditions: ["(> x 0)"], postconditions: ["(> x 0)"], invariants: [], verificationMode: "prove", updatedAt: new Date().toISOString() }),
     (error) => error?.code === "SOLVER_UNKNOWN" && /proof obligation/u.test(error?.message ?? "") && error?.details === "proof unknown",
+  );
+
+  const modelUnknown = new Z3ProofEngine(systemZ3, 500);
+  modelUnknown.runZ3 = async () => ({ status: "unknown", output: "model unknown" });
+  await assert.rejects(
+    () => modelUnknown.verify({
+      functionName: "unknown_model_search",
+      version: 1,
+      declarations: ["(declare-const x (_ BitVec 32))", "(declare-const y (_ BitVec 32))"],
+      preconditions: ["(distinct x y)"],
+      postconditions: ["(= ((_ extract 15 0) x) ((_ extract 15 0) y))"],
+      invariants: [],
+      verificationMode: "find-model",
+      updatedAt: new Date().toISOString(),
+    }),
+    (error) => error?.code === "SOLVER_UNKNOWN" && /searching for a satisfying model/u.test(error?.message ?? "") && error?.details === "model unknown",
   );
 
   const helperEngine = new Z3ProofEngine(systemZ3, 500);
   assert.deepEqual(helperEngine.inferDeclarations(["(and (> n 0) (= result (+ n x)) true)"]).sort(), ["(declare-const n Int)", "(declare-const result Int)", "(declare-const x Int)"]);
+  assert.deepEqual(helperEngine.inferDeclarations(["(= (bvxor x #x00000001) y)"], ["(declare-const x (_ BitVec 32))", "(declare-const y (_ BitVec 32))"]), []);
   const script = helperEngine.buildScript(["(declare-const n Int)"], ["(> n 0)"]);
   assert.match(script, /\(declare-const n Int\)/u);
   assert.match(script, /\(assert \(> n 0\)\)/u);
