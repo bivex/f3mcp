@@ -41,7 +41,9 @@ The compiled server entrypoints are written to `build/`.
 
 ## Universal `mcpServers` config
 
-Use this as a portable baseline for MCP hosts that support `mcpServers`, `command`, `args`, and `cwd`:
+Use this as a portable baseline for MCP hosts that support `mcpServers`, `command`, `args`, and `cwd`.
+
+On Windows, keep the same structure but replace the example paths with your local absolute paths, for example `C:\\augment\\f3mcp\\build\\specification.js` and `C:\\augment\\f3mcp`.
 
 ```json
 {
@@ -181,8 +183,8 @@ For valid SMT-LIB examples used by the verification server, see:
 
 ## Verification notes
 
-- The verification server prefers Homebrew's system Z3 at `/opt/homebrew/bin/z3`, then `/usr/local/bin/z3`, then `z3` from `PATH`.
-- You can override the solver path explicitly with `Z3_BINARY=/absolute/path/to/z3`.
+- The verification server prefers `Z3_BINARY` when set. On Windows it also checks common `PATH` entries for `z3.exe`, then falls back to `z3.exe`/`z3`. On macOS it also checks `/opt/homebrew/bin/z3` and `/usr/local/bin/z3`.
+- You can override the solver path explicitly with `Z3_BINARY=/absolute/path/to/z3` on POSIX shells, or set `Z3_BINARY=C:\\path\\to\\z3.exe` in Windows before launching the server.
 - `SOLVER_UNAVAILABLE` means the server could not start the solver process.
 - `VALIDATION_FAILED` means Z3 started, but rejected the submitted SMT-LIB input.
 

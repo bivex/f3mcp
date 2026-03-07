@@ -13,7 +13,7 @@
  * Commercial licensing available upon request.
  */
 
-import { resolve } from "node:path";
+import { delimiter, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -28,10 +28,16 @@ import { errorResult, normalizeContractError, runStdio, structuredResult, withTi
 const specs = new FileSpecificationRepository(resolve(process.cwd(), "data/specifications.json"));
 const jobs = new FileVerificationJobRepository(resolve(process.cwd(), "data/verification-jobs.json"));
 const resolveZ3Binary = () => {
+  const pathEntries = (process.env.PATH ?? process.env.Path ?? "").split(delimiter).filter(Boolean);
+  const windowsCandidates = process.platform === "win32"
+    ? pathEntries.flatMap((entry) => [resolve(entry, "z3.exe"), resolve(entry, "z3")])
+    : [];
   const candidates = [
     process.env.Z3_BINARY,
+    ...windowsCandidates,
     "/opt/homebrew/bin/z3",
     "/usr/local/bin/z3",
+    "z3.exe",
     "z3",
   ].filter((candidate): candidate is string => Boolean(candidate));
 

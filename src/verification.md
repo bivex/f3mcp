@@ -2,7 +2,7 @@
 
 This server verifies a stored spec version by translating its conditions into SMT-LIB and sending them to `z3`.
 
-On macOS, the server prefers Homebrew's system binary at `/opt/homebrew/bin/z3` and falls back to `/usr/local/bin/z3` or `z3` from `PATH`. You can override the binary path explicitly with `Z3_BINARY=/absolute/path/to/z3`.
+The server prefers `Z3_BINARY` when set. On Windows it also checks common `PATH` entries for `z3.exe`, then falls back to `z3.exe` or `z3`. On macOS it also checks `/opt/homebrew/bin/z3` and `/usr/local/bin/z3`. You can override the binary path explicitly with `Z3_BINARY=/absolute/path/to/z3` on POSIX shells, or by setting `Z3_BINARY=C:\\path\\to\\z3.exe` before launching the server on Windows.
 
 The adapter currently invokes Z3 with CLI flags aligned to the installed 4.15.x interface:
 

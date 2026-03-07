@@ -1,10 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
+import { delimiter, resolve } from "node:path";
 import { VerificationService } from "../build/application/verification-service.js";
 import { Z3ProofEngine } from "../build/infrastructure/z3-proof-engine.js";
 
-const systemZ3 = existsSync("/opt/homebrew/bin/z3") ? "/opt/homebrew/bin/z3" : "z3";
+const pathEntries = (process.env.PATH ?? process.env.Path ?? "").split(delimiter).filter(Boolean);
+const systemZ3 = [
+  process.env.Z3_BINARY,
+  ...(process.platform === "win32" ? pathEntries.flatMap((entry) => [resolve(entry, "z3.exe"), resolve(entry, "z3")]) : []),
+  "/opt/homebrew/bin/z3",
+  "/usr/local/bin/z3",
+  "z3.exe",
+  "z3",
+].find((candidate) => candidate && (candidate === "z3" || candidate === "z3.exe" || existsSync(candidate))) ?? "z3";
 
 test("VerificationService reuses an existing job without invoking the engine", async () => {
   let getVersionCalls = 0;

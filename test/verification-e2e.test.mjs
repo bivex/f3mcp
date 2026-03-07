@@ -30,7 +30,7 @@ async function withVerificationClient(specifications, run) {
   await writeFile(join(tempDir, "data", "verification-jobs.json"), "[]\n");
 
   const transport = new StdioClientTransport({
-    command: "node",
+    command: process.execPath,
     args: [serverEntry],
     cwd: tempDir,
     stderr: "pipe",
