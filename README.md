@@ -83,7 +83,7 @@ On Windows, keep the same structure but replace the example paths with your loca
 From the repository root:
 
 - `npm test`
-- `node --test test/*.test.mjs`
+- `node --test`
 - `node --test test/strlen-arm-verification.test.mjs`
 
 The test suite includes MCP stdio end-to-end coverage for all four servers, verification unit coverage, and a dedicated `strlen_arm` scenario suite.

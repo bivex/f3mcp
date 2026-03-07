@@ -13,8 +13,9 @@
  * Commercial licensing available upon request.
  */
 
-import { delimiter, resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toolOutputSchema } from "./contracts/errors.js";
@@ -28,8 +29,9 @@ import { errorResult, normalizeContractError, runStdio, structuredResult, withTi
 const specs = new FileSpecificationRepository(resolve(process.cwd(), "data/specifications.json"));
 const jobs = new FileVerificationJobRepository(resolve(process.cwd(), "data/verification-jobs.json"));
 const resolveZ3Binary = () => {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const bundledWindowsZ3 = process.platform === "win32"
-    ? resolve(process.cwd(), "z3-4.16.0-x64-win", "bin", "z3.exe")
+    ? resolve(repoRoot, "z3-4.16.0-x64-win", "bin", "z3.exe")
     : undefined;
   const pathEntries = (process.env.PATH ?? process.env.Path ?? "").split(delimiter).filter(Boolean);
   const windowsCandidates = process.platform === "win32"
@@ -49,7 +51,7 @@ const resolveZ3Binary = () => {
     if (candidate === "z3" || existsSync(candidate)) return candidate;
   }
 
-  return "z3";
+  return process.platform === "win32" ? "z3.exe" : "z3";
 };
 
 const verification = new VerificationService(specs, jobs, new Z3ProofEngine(resolveZ3Binary(), 3_000));

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "bun run build && node --test test/*.test.mjs",
+    "test": "bun run build && node --test",
     "spec": "node build/specification.js",
     "verify": "node build/verification.js",
     "asm": "node build/assembly.js",
